@@ -1,0 +1,12 @@
+slate-docs-trd-reference/
+build/
+build-asan/
+trds/
+.vscode/
+tests/
+dts/
+payload/
+scripts/
+src/
+tools/
+userspace/
