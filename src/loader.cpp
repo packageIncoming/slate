@@ -64,7 +64,7 @@ int ELF_File::init(Hart& hart)
 
         //  copy p_filesz bytes starting from p_offset into memory starting at 
         //  address p_paddr
-        u64 memory_addr = hart.mem_addr(ph.p_paddr);
+        u64 memory_addr = hart.to_index(ph.p_paddr);
         std::copy(
             buffer.begin()+ph.p_offset,
             buffer.begin()+ph.p_offset+ph.p_filesz,
