@@ -1,6 +1,7 @@
 #include <iostream>
 #include "main.hpp"
 #include "loader.hpp"
+#include "elf.hpp"
 #include "hart.hpp"
 
 void print_help(bool error) {

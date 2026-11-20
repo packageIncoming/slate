@@ -6,7 +6,7 @@ project(slate LANGUAGES CXX)
 add_compile_options(-Wall -Wextra -Werror)
 
 option(SLATE_ASAN "Enable AddressSanitizer" OFF)
-add_executable(slate src/main.cpp src/hart.cpp src/loader.cpp src/decoder.cpp src/memory.cpp)
+add_executable(slate src/main.cpp src/hart.cpp src/loader.cpp src/decoder.cpp src/memory.cpp src/elf.cpp)
 
 
 # Apply ASAN if requested as option (DSLATE_ASAN=ON)
