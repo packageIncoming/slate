@@ -17,8 +17,6 @@ int Loader::load(Hart& hart, ELF_File& elf)
 
     //  iterate over programheaders in ELF & load their segments into
     //  memory of the hart:
-
-
     for(const ProgramHeader& ph: elf.get_program_headers())
     {
         //  verify bounds are correct otherwise return 1:

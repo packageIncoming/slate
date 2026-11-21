@@ -1,4 +1,4 @@
-#include "decoder.hpp"
+#include "instruction.hpp"
 #include <iostream>
 
 namespace Decoder
