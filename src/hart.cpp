@@ -1,13 +1,14 @@
 #include "hart.hpp"
 #include "instruction.hpp"
+#include "memory.hpp"
 #include <cstring>
 
 int Hart::run()
 {
-    while (memory.read64(pc) == 0)
+    while (memory.access(tohost_ram_addr, 64, AccessClass::READ) != 0)
     {
         //  fetch pc
-        u32 raw_instr = memory.read32(pc);
+        u32 raw_instr = static_cast<u32>(memory.access(pc, 32, AccessClass::READ));
         //  decode it
         Instruction instr = Decoder::decode(raw_instr);
 
