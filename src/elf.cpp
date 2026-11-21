@@ -85,53 +85,45 @@ int ELF_File::init()
 
         SectionHeader sh{};
         sh.base_addr = e_shoff + (e_shentsize*sh_idx);
-        //  sh_name skipped
         sh.sh_type = extract_u32(sh.base_addr+0x4);
-        // if (sh.sh_type != 0x2) continue;
-        //  sh_flags skipped
-        // u64 sh_addr = extract_u64(base_addr + 0x10); // address of section in mem
         sh.sh_offset = extract_u64(sh.base_addr+0x18); // offset of section in FILE
         sh.sh_size = extract_u64(sh.base_addr+0x20); // section size in bytes
-        // entry # that stores the string table 
-        sh.sh_link = extract_u32(sh.base_addr+0x28); 
-        // u64 string_zxtable_base_addr = e_shoff + (e_shentsize * sh_link);
-        //  sh_info skipped
-        //  sh_addralign skipped
+        sh.sh_link = extract_u32(sh.base_addr+0x28); // entry num that stores string table
         sh.sh_entsize = extract_u64(sh.base_addr+0x38);
-        //  symbol table found
-        // sh.symbol_count = sh_size / sh_entsize;
-
+        
         section_headers.push_back(sh);
-
+        
+        //  EXTRACT 'tohost' BELOW:
+        if (sh.sh_type != 0x2) continue;
+        u64 symbol_count = sh.sh_size / sh.sh_entsize;
         //  get base address of string table:
-        // u64 str_table_base_addr = e_shoff + (e_shentsize*sh.sh_link);
-        // u64 str_table_sh_offset = extract_u64(str_table_base_addr+0x18);
+        u64 str_table_base_addr = e_shoff + (e_shentsize*sh.sh_link);
+        u64 str_table_sh_offset = extract_u64(str_table_base_addr+0x18);
 
-        // //  iterate over SYMBOL TABLE entries:
-        // for(u64 st_idx = 0; st_idx <symbol_count; ++st_idx)
-        // {
-        //     u64 symbol_base_addr = sh_offset + (st_idx * sh_entsize);
-        //     u32 st_name = extract_u32(symbol_base_addr);
-        //     // u8 st_info = extract_u8(symbol_base_addr+0x4);
-        //     u64 st_value = extract_u64(symbol_base_addr+0x8);
-        //     // u64 st_size = extract_u64(symbol_base_addr+0x10);
-        //     u64 symbol_string_ptr = str_table_sh_offset + st_name;
-        //     //  create the string
-        //     std::string name = "";
-        //     while (buffer[symbol_string_ptr] != '\0')
-        //     {
-        //         char c= static_cast<char>(buffer[symbol_string_ptr]);
-        //         name.push_back(c);
-        //         symbol_string_ptr++;
-        //     }
-        //     if (name == "tohost")
-        //     {
-        //         //  we have found our target symbol
-        //         tohost_addr = st_value;
-        //         break;
-        //     }
-        // }
-        // break;
+        //  iterate over SYMBOL TABLE entries:
+        for(u64 st_idx = 0; st_idx <symbol_count; ++st_idx)
+        {
+            u64 symbol_base_addr = sh.sh_offset + (st_idx * sh.sh_entsize);
+            u32 st_name = extract_u32(symbol_base_addr);
+            // u8 st_info = extract_u8(symbol_base_addr+0x4);
+            u64 st_value = extract_u64(symbol_base_addr+0x8);
+            // u64 st_size = extract_u64(symbol_base_addr+0x10);
+            u64 symbol_string_ptr = str_table_sh_offset + st_name;
+            //  create the string
+            std::string name = "";
+            while (buffer[symbol_string_ptr] != '\0')
+            {
+                char c= static_cast<char>(buffer[symbol_string_ptr]);
+                name.push_back(c);
+                symbol_string_ptr++;
+            }
+            if (name == "tohost")
+            {
+                //  we have found our target symbol
+                tohost_addr = st_value;
+                break;
+            }
+        }
     }
 
     if (tohost_addr == 0)
@@ -139,6 +131,8 @@ int ELF_File::init()
         std::cerr << "!!! 'tohost' SYMBOL NOT FOUND IN ELF !!!"<< std::endl;
         return 1;
     }
+
+    ready = 1;//    ready to be used
 
     return 0;
 }
@@ -207,6 +201,7 @@ bool ELF_File::verify()
         std::cerr << "!!! ELF HAS INVALID e_machine VALUE !!!" << std::endl;
         return false;
     }
+
     return true;
 }
 

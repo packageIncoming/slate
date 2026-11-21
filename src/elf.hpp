@@ -42,33 +42,40 @@ class ELF_File
     bool loaded = false;    //  whether the file has been loaded
 
     //  extracted from ELF header:
-    u64 e_entry{};
-    u64 e_phoff{};
-    u64 e_shoff{};
-    u32 e_flags{};
-    u16 e_ehsize{};
-    u16 e_phentsize{};
-    u16 e_phnum{};
-    u16 e_shentsize{};
-    u16 e_shnum{};
+    u64 e_entry{0};
+    u64 e_phoff{0};
+    u64 e_shoff{0};
+    u32 e_flags{0};
+    u16 e_ehsize{0};
+    u16 e_phentsize{0};
+    u16 e_phnum{0};
+    u16 e_shentsize{0};
+    u16 e_shnum{0};
     u64 tohost_addr{0};
+    u8  ready{0};   //  1 = ready (init returned 0), 0 = not ready (failed to load properly)
 
     //  loads a file from filepath; ret 0 on success 1 on fail
     int load_file();
     //  verifies if ELF file is ready to be used
     bool verify();         
+    int init(); //  return 0 on success 1 on fail
+
     //  extracts a value starting at (start +offset) from buffer start
     u64 extract_u64(u64 offset);
     u32 extract_u32(u64 offset);
     u16 extract_u16(u64 offset);
     u8 extract_u8(u64 offset);
- 
+    
     
     public:
-    //  public entrypoint to initialize; ret 1 if unsuccessful, 0 if successful (instance ready to use)
-    int init(); 
+    //  getters
     u64 get_tohost_addr() {return tohost_addr;}
     u64 get_entry() {return e_entry;}
+    bool is_ready() {return ready == 1;}
+    const std::vector<ProgramHeader>& get_program_headers(){return program_headers;}
+    const auto buff_begin() { return buffer.begin();}
+    const auto buff_end() {return buffer.end();}
+    u64 size() {return buffer.size();}
     //  constructor
-    ELF_File(std::string fp) : filepath(fp) {}
+    ELF_File(std::string fp) : filepath(fp) {init();}
 };

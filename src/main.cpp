@@ -35,8 +35,8 @@ int main(int argc, char* argv[])
 
     if (args.info_filepath != "")
     {
-        ELF_File elf{args.info_filepath};
-        if (elf.init(hart))
+        ELF_File elf(args.info_filepath);
+        if (!elf.is_ready())
         {
             std::cerr << "!!! FAILED TO INITIALIZE ELF FILE !!!" <<std::endl;
             return 1;
@@ -49,12 +49,14 @@ int main(int argc, char* argv[])
     }
     if (args.run_filepath != "")
     {
-        ELF_File elf{args.run_filepath};
-        if (elf.init(hart))
+        ELF_File elf(args.run_filepath);
+        if (!elf.is_ready())
         {
             std::cerr << "!!! FAILED TO INITIALIZE ELF FILE !!!" <<std::endl;
             return 1;
         }
+        //  use loader to load into hart:
+        Loader::load(hart,elf);
         hart.run();
     }
 

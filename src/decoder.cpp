@@ -1,6 +1,8 @@
 #include "decoder.hpp"
 #include <iostream>
 
+namespace Decoder
+{
 Instruction decode(u64 data)
 {
     Instruction instr{};
@@ -11,3 +13,4 @@ Instruction decode(u64 data)
 
     return instr;
 }
+};
