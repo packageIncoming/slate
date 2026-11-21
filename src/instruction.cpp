@@ -1,6 +1,5 @@
 #include "instruction.hpp"
 #include "shared.hpp"
-#include <iostream>
 
 namespace Decoder
 {
@@ -40,17 +39,31 @@ Instruction decode(u32 data)
         // B type:
         case BRANCH:
         {
-            u64 raw = static_cast<u64>(bits(data,))
+            //  get imm[4:1 | 11]
+            u64 raw0 = (static_cast<u64>(bits(data, 8, 11)) << 1) | (static_cast<u64>(bits(data, 7, 7)) << 11);
+            //  get imm[12:10 | 5]
+            u64 raw1 = (static_cast<u64>(bits(data, 25, 30)) << 5) | (static_cast<u64>(bits(data, 31, 31)) << 12);
+            instr.imm = sext(raw0 | raw1, 12);
+            break;
         }
-        break;
         // J type:
-        case JAL:
+        case JAL: {
+            u64 imm_20    = static_cast<u64>(bits(data, 31, 31)) << 20;
+            u64 imm_19_12 = static_cast<u64>(bits(data, 12, 19)) << 12;
+            u64 imm_11    = static_cast<u64>(bits(data, 20, 20)) << 11;
+            u64 imm_10_1  = static_cast<u64>(bits(data, 21, 30)) << 1;
+
+            instr.imm = sext(imm_20 | imm_19_12 | imm_11 | imm_10_1, 20);
+            break;
+        }
         break;
         // U type:
         case LUI:
-        case AUIPC:
-        break;
-
+        case AUIPC: {
+            u64 imm_u = static_cast<u64>(bits(data, 12, 31)) << 12;
+            instr.imm = sext(imm_u, 31);
+            break;
+        }
         default:
             break;
     }
