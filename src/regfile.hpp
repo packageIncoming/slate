@@ -54,4 +54,13 @@ class RegFile
         if (r == Register::x0) return;
         registers[static_cast<u8>(r)] = val;
     }
+
+    u64 get(u8 addr) 
+    {
+        return get(static_cast<Register>(addr));
+    }
+    void set(u8 addr, u64 val)
+    {
+        set(static_cast<Register>(addr), val);
+    }
 };
