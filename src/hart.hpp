@@ -2,10 +2,10 @@
 //  header file defining a hart
 //  little-endian all throughout
 #pragma once
-#include "loader.hpp"
+#include "csrfile.hpp"
+#include "regfile.hpp"
 #include "shared.hpp"
 #include "memory.hpp"
-#include <array>
 
 
 class Hart 
@@ -15,11 +15,12 @@ class Hart
     private:
     u64 pc{0};   //  program counter
     u64 tohost_ram_addr{0};
-    std::array<u64,32> registers{};  //  x0 to x31, general purpose registers
+    RegFile registers{};
     Memory memory{};   //  memory
-    //  TODO add CSRs 
-    u64 privilege{3};  //  privilege level. 0 = user 1=supervisor 3=machine
-
+    CSRFile csr{};
+    u8 privilege{3};  //  privilege level. 0 = user 1=supervisor 3=machine
+    
+    
 
     public:
     //  getters and setters:
