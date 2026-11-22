@@ -3,626 +3,710 @@
 #include "memory.hpp"
 #include "shared.hpp"
 #include <cstring>
+#include "trap.hpp"
 
+void Hart::trap(u64 cause, u64 tval)
+{
+    if (tval){}// make compiler happy
+    //  set mepc to addr of instr that caused trap
+    csr.set_mepc(pc);
+    //  set mcause to have the cause and bit 63 clear for an exception
+    csr.set_mcause(cause);
+    //  set MPP to privilege level trap came from
+    u64 ms = csr.get_mstatus();
+    ms = (ms & ~(u64{0b11} << 11)) | (static_cast<u64>(privilege) << 11);  // write MPP
+    csr.set_mstatus(ms);
 
+    //  set privilege level to machine mode (3)
+    privilege = 3;
+    //  set pc  to address in mtvec w/ low 2 bits zeroed
+    pc = csr.get_mtvec() & ~static_cast<u64>(3);
+}
 
 int Hart::run()
 {
-    while (memory.access(tohost_ram_addr, 64, AccessClass::READ) == 0)
+    bool done = false;
+    while (!done)
     {
         //  fetch pc
-        u32 raw_instr = static_cast<u32>(memory.access(pc, 32, AccessClass::READ));
-        //  decode it
-        Instruction instr = Decoder::decode(raw_instr);
-        u64 next_pc = pc+4;
-        switch(instr.op)
+        try
         {
-            case LOAD:
-            {
-                u64 addr = registers.get(instr.rs1) + instr.imm;
-                u64 result = 0;
-                switch(instr.funct3)
-                {
-                    case 0b000: // lb
-                    {
-                        u64 val =(memory.access(addr, 8, AccessClass::READ));
-                        result = sext(val,8);
-                        break;
-                    }
-                    case 0b001: // lh
-                    {
-                        u64 val =(memory.access(addr, 16, AccessClass::READ));
-                        result = sext(val,16);
-                        break;
-                    }
-                    case 0b010: //lw
-                    {
-                        u64 val =(memory.access(addr, 32, AccessClass::READ));
-                        result = sext(val,32);
-                        break;
-                    }
-                    case 0b011:// ld
-                    {
-                        u64 val =(memory.access(addr, 64, AccessClass::READ));
-                        result = sext(val,64);
-                        break;
-                    }
-                    case 0b100: //lbu
-                    {
-                        u64 val =(memory.access(addr, 8, AccessClass::READ));
-                        result = val;
-                        break;
-                    }
-                    case 0b101:// lhu
-                    {
-                        u64 val =(memory.access(addr, 16, AccessClass::READ));
-                        result = val;
-                        break;
-                    }
-                    case 0b110: // lwu
-                    {
-                        u64 val =(memory.access(addr, 32, AccessClass::READ));
-                        result = val;
-                        break;
-                    }
-                    default:
-                        //  illegal
-                        break;
-                }
-                //  now update the value 
-                registers.set(instr.rd,result);
-                break;
-            }
-            case MISC_MEM:
-            {
-                switch(instr.funct3)
-                {
-                    case 0b000: // fence
-                    {
-                        break;
-                    }
-                    case 0b001: // fence.i
-                    {
-                        break;
-                    }
-                    default:
-                    {
-                        //illegal
-                        break;
-                    }
 
-                }
-                break;
-            }
-            case OP_IMM:
+            u32 raw_instr = static_cast<u32>(memory.access(pc, 32, AccessClass::READ));
+            //  decode it
+            Instruction instr = Decoder::decode(raw_instr);
+            u64 next_pc = pc+4;
+            switch(instr.op)
             {
-                switch(instr.funct3)
+                case LOAD:
                 {
-                    case 0b000: // addi
+                    u64 addr = registers.get(instr.rs1) + instr.imm;
+                    u64 result = 0;
+                    switch(instr.funct3)
                     {
-                        u64 val = registers.get(instr.rs1) + instr.imm;
-                        registers.set(instr.rd,val);
-                        break;
-                    }
-                    case 0b001: // slli (check bits[31:26] == 0b000000; 6-bit shamt in [25:20])
-                    {
-                        if (bits(raw_instr, 26, 31) != 0b000000) {
-                            // raise illegal instruction exception (cause 2)
+                        case 0b000: // lb
+                        {
+                            u64 val =(memory.access(addr, 8, AccessClass::READ));
+                            result = sext(val,8);
                             break;
                         }
-                        u8 shamt = bits(raw_instr,20,25);
-                        u64 x = registers.get(instr.rs1);
-                        registers.set(instr.rd,x << shamt);
-                        break;
-                    }
-                    case 0b010: // slti
-                    {
-                        i64 x = static_cast<i64>(registers.get(instr.rs1));
-                        i64 imm = static_cast<i64>(instr.imm);
-                        if (x < imm)
+                        case 0b001: // lh
                         {
-                            registers.set(instr.rd,1);
+                            u64 val =(memory.access(addr, 16, AccessClass::READ));
+                            result = sext(val,16);
+                            break;
                         }
-                        else {
-                            registers.set(instr.rd,0);
-                        }
-                        break;
-                    }
-                    case 0b011: // sltiu
-                    {
-                        u64 x = registers.get(instr.rs1);
-                        u64 imm = instr.imm;
-                        if (x < imm)
+                        case 0b010: //lw
                         {
-                            registers.set(instr.rd,1);
+                            u64 val =(memory.access(addr, 32, AccessClass::READ));
+                            result = sext(val,32);
+                            break;
                         }
-                        else {
-                            registers.set(instr.rd,0);
+                        case 0b011:// ld
+                        {
+                            u64 val =(memory.access(addr, 64, AccessClass::READ));
+                            result = sext(val,64);
+                            break;
                         }
-                        break;
-                    }
-                    case 0b100: // xori
-                    {
-                        u64 x = registers.get(instr.rs1);
-                        u64 imm = instr.imm;
-                        registers.set(instr.rd, x ^ imm);
-                        break;
-                    }
-                    case 0b101: // srli (bits[31:26] == 0b000000) / srai (bits[31:26] == 0b010000)
-                    {
-                        unsigned shamt = bits(raw_instr, 20, 25);
-                        u64 x = registers.get(instr.rs1);
-                        u64 top6 = bits(raw_instr, 26, 31);
-
-                        if (top6 == 0b000000) {
-                            // srli
-                            registers.set(instr.rd, x >> shamt);
-                        } else if (top6 == 0b010000) {
-                            // srai
-                            registers.set(instr.rd, static_cast<u64>(static_cast<i64>(x) >> shamt));
-                        } else {
-                            // reserved/unrecognized encoding -> illegal instruction exception (cause 2)
+                        case 0b100: //lbu
+                        {
+                            u64 val =(memory.access(addr, 8, AccessClass::READ));
+                            result = val;
+                            break;
                         }
-                        break;
+                        case 0b101:// lhu
+                        {
+                            u64 val =(memory.access(addr, 16, AccessClass::READ));
+                            result = val;
+                            break;
+                        }
+                        case 0b110: // lwu
+                        {
+                            u64 val =(memory.access(addr, 32, AccessClass::READ));
+                            result = val;
+                            break;
+                        }
+                        default:
+                            //  illegal
+                            break;
                     }
-                    case 0b110: // ori
-                    {
-                        u64 x = registers.get(instr.rs1);
-                        u64 imm = instr.imm;
-                        registers.set(instr.rd, x | imm);
-                        break;
-                    }
-                    case 0b111: // andi
-                    {
-                        u64 x = registers.get(instr.rs1);
-                        u64 imm = instr.imm;
-                        registers.set(instr.rd, x & imm);
-                        break;
-                    }
-                    default:
-                        //illegal
-                        break;
+                    //  now update the value 
+                    registers.set(instr.rd,result);
+                    break;
                 }
-                break;
-            }
-            case AUIPC:
-            {
-                registers.set(instr.rd ,pc + instr.imm);
-                break;
-            }
-            case OP_IMM_32:
-            {
-                switch(instr.funct3)
+                case MISC_MEM:
                 {
-                    case 0b000: // addiw
+                    switch(instr.funct3)
                     {
-                        //  get low 32 of rs1
-                        //  get low 32 of imm
-                        // add
-                        // sign extend
-                        u32 x = static_cast<u32>(registers.get(instr.rs1));
-                        u32 imm = static_cast<u32>(instr.imm);  // already sign extended
-                        u32 res = x+imm;
-                        registers.set(instr.rd,sext(static_cast<u64>(res), 32));
-                        break;
-                    }
-                    case 0b001: // slliw (funct7 == 0b0000000; 5-bit shamt in [24:20])
-                    {
-                        if (instr.funct7 == 0b0000000)
+                        case 0b000: // fence
                         {
-                            u32 x  = static_cast<u32>(registers.get(instr.rs1));
-                            unsigned shamt = bits(raw_instr,20,24);
-                            //  lshift x
-                            registers.set(
-                                instr.rd,
-                                sext(static_cast<u64>(x << shamt),32)
-                            );
+                            break;
                         }
-                        else
+                        case 0b001: // fence.i
+                        {
+                            break;
+                        }
+                        default:
                         {
                             //illegal
+                            break;
                         }
-                        break;
+
                     }
-                    case 0b101: // srliw (funct7 == 0b0000000) / sraiw (funct7 == 0b0100000)
-                    {
-                        if (instr.funct7 == 0b0000000)
-                        {
-                            //srliw
-                            u32 x  = static_cast<u32>(registers.get(instr.rs1));
-                            unsigned shamt = bits(raw_instr,20,24);
-                            //  rshift x
-                            registers.set(
-                                instr.rd,
-                                sext(static_cast<u64>(x >> shamt),32)
-                            );
-                        }
-                        else if (instr.funct7 == 0b0100000)
-                        {
-                            // sraiw
-                            u32 x  = static_cast<u32>(registers.get(instr.rs1));
-                            unsigned shamt = bits(raw_instr,20,24);
-                            //  arithmetic shift on the 32-bit word
-                            i32 res = static_cast<i32>(x) >> shamt;
-                            registers.set(
-                                instr.rd,
-                                static_cast<u64>(static_cast<i64>(res))
-                            );
-                        }
-                        else
-                        {
-                            //  illegal
-                        }
-                        break;
-                    }
-                    default:
-                        //illegal
-                        break;
+                    break;
                 }
-                break;
-            }
-            case STORE:
-            {
-                u64 imm = instr.imm;
-                u64 addr = imm + registers.get(instr.rs1);
-                switch(instr.funct3)
+                case OP_IMM:
                 {
-                    case 0b000: // sb
+                    switch(instr.funct3)
                     {
-                        memory.access(addr, 8, AccessClass::WRITE,registers.get(instr.rs2));
-                        break;
+                        case 0b000: // addi
+                        {
+                            u64 val = registers.get(instr.rs1) + instr.imm;
+                            registers.set(instr.rd,val);
+                            break;
+                        }
+                        case 0b001: // slli (check bits[31:26] == 0b000000; 6-bit shamt in [25:20])
+                        {
+                            if (bits(raw_instr, 26, 31) != 0b000000) {
+                                // raise illegal instruction exception (cause 2)
+                                break;
+                            }
+                            u8 shamt = bits(raw_instr,20,25);
+                            u64 x = registers.get(instr.rs1);
+                            registers.set(instr.rd,x << shamt);
+                            break;
+                        }
+                        case 0b010: // slti
+                        {
+                            i64 x = static_cast<i64>(registers.get(instr.rs1));
+                            i64 imm = static_cast<i64>(instr.imm);
+                            if (x < imm)
+                            {
+                                registers.set(instr.rd,1);
+                            }
+                            else {
+                                registers.set(instr.rd,0);
+                            }
+                            break;
+                        }
+                        case 0b011: // sltiu
+                        {
+                            u64 x = registers.get(instr.rs1);
+                            u64 imm = instr.imm;
+                            if (x < imm)
+                            {
+                                registers.set(instr.rd,1);
+                            }
+                            else {
+                                registers.set(instr.rd,0);
+                            }
+                            break;
+                        }
+                        case 0b100: // xori
+                        {
+                            u64 x = registers.get(instr.rs1);
+                            u64 imm = instr.imm;
+                            registers.set(instr.rd, x ^ imm);
+                            break;
+                        }
+                        case 0b101: // srli (bits[31:26] == 0b000000) / srai (bits[31:26] == 0b010000)
+                        {
+                            unsigned shamt = bits(raw_instr, 20, 25);
+                            u64 x = registers.get(instr.rs1);
+                            u64 top6 = bits(raw_instr, 26, 31);
+
+                            if (top6 == 0b000000) {
+                                // srli
+                                registers.set(instr.rd, x >> shamt);
+                            } else if (top6 == 0b010000) {
+                                // srai
+                                registers.set(instr.rd, static_cast<u64>(static_cast<i64>(x) >> shamt));
+                            } else {
+                                // reserved/unrecognized encoding -> illegal instruction exception (cause 2)
+                            }
+                            break;
+                        }
+                        case 0b110: // ori
+                        {
+                            u64 x = registers.get(instr.rs1);
+                            u64 imm = instr.imm;
+                            registers.set(instr.rd, x | imm);
+                            break;
+                        }
+                        case 0b111: // andi
+                        {
+                            u64 x = registers.get(instr.rs1);
+                            u64 imm = instr.imm;
+                            registers.set(instr.rd, x & imm);
+                            break;
+                        }
+                        default:
+                            //illegal
+                            break;
                     }
-                    case 0b001: // sh
-                    {
-                        memory.access(addr, 16, AccessClass::WRITE,registers.get(instr.rs2));
-                        break;
-                    }
-                    case 0b010: // sw
-                    {
-                        memory.access(addr, 32, AccessClass::WRITE,registers.get(instr.rs2));
-                        break;
-                    }
-                    case 0b011: // sd
-                    {
-                        memory.access(addr, 64, AccessClass::WRITE,registers.get(instr.rs2));
-                        break;
-                    }
-                    default:
-                        // illegal
-                        break;
+                    break;
                 }
-                break;
-            }
-            case OP:
-            {
-                switch(instr.funct3)
+                case AUIPC:
                 {
-                    case 0b000: // add (funct7 == 0b0000000) / sub (funct7 == 0b0100000)
+                    registers.set(instr.rd ,pc + instr.imm);
+                    break;
+                }
+                case OP_IMM_32:
+                {
+                    switch(instr.funct3)
                     {
-                        u64 x = registers.get(instr.rs1);
-                        u64 y = registers.get(instr.rs2);
-                        if (instr.funct7 == 0b0000000) {
+                        case 0b000: // addiw
+                        {
+                            //  get low 32 of rs1
+                            //  get low 32 of imm
                             // add
-                            registers.set(instr.rd, x + y);
-                        } else if (instr.funct7 == 0b0100000) {
-                            // sub
-                            registers.set(instr.rd, x - y);
-                        } else {
-                            // illegal instruction exception (cause 2)
-                        }
-                        break;
-                    }
-                    case 0b001: // sll
-                    {
-                        if (instr.funct7 != 0b0000000) {
-                            // illegal instruction exception (cause 2)
+                            // sign extend
+                            u32 x = static_cast<u32>(registers.get(instr.rs1));
+                            u32 imm = static_cast<u32>(instr.imm);  // already sign extended
+                            u32 res = x+imm;
+                            registers.set(instr.rd,sext(static_cast<u64>(res), 32));
                             break;
                         }
-                        u8 shamt = registers.get(instr.rs2) & 0b111111;
-                        registers.set(instr.rd, registers.get(instr.rs1) << shamt);
-                        break;
-                    }
-                    case 0b010: // slt
-                    {
-                        if (instr.funct7 != 0b0000000) {
-                            // illegal instruction exception (cause 2)
+                        case 0b001: // slliw (funct7 == 0b0000000; 5-bit shamt in [24:20])
+                        {
+                            if (instr.funct7 == 0b0000000)
+                            {
+                                u32 x  = static_cast<u32>(registers.get(instr.rs1));
+                                unsigned shamt = bits(raw_instr,20,24);
+                                //  lshift x
+                                registers.set(
+                                    instr.rd,
+                                    sext(static_cast<u64>(x << shamt),32)
+                                );
+                            }
+                            else
+                            {
+                                //illegal
+                            }
                             break;
                         }
-                        i64 x = static_cast<i64>(registers.get(instr.rs1));
-                        i64 y = static_cast<i64>(registers.get(instr.rs2));
-                        registers.set(instr.rd, x < y ? 1 : 0);
-                        break;
-                    }
-                    case 0b011: // sltu
-                    {
-                        if (instr.funct7 != 0b0000000) {
-                            // illegal instruction exception (cause 2)
+                        case 0b101: // srliw (funct7 == 0b0000000) / sraiw (funct7 == 0b0100000)
+                        {
+                            if (instr.funct7 == 0b0000000)
+                            {
+                                //srliw
+                                u32 x  = static_cast<u32>(registers.get(instr.rs1));
+                                unsigned shamt = bits(raw_instr,20,24);
+                                //  rshift x
+                                registers.set(
+                                    instr.rd,
+                                    sext(static_cast<u64>(x >> shamt),32)
+                                );
+                            }
+                            else if (instr.funct7 == 0b0100000)
+                            {
+                                // sraiw
+                                u32 x  = static_cast<u32>(registers.get(instr.rs1));
+                                unsigned shamt = bits(raw_instr,20,24);
+                                //  arithmetic shift on the 32-bit word
+                                i32 res = static_cast<i32>(x) >> shamt;
+                                registers.set(
+                                    instr.rd,
+                                    static_cast<u64>(static_cast<i64>(res))
+                                );
+                            }
+                            else
+                            {
+                                //  illegal
+                            }
                             break;
                         }
-                        u64 x = registers.get(instr.rs1);
-                        u64 y = registers.get(instr.rs2);
-                        registers.set(instr.rd, x < y ? 1 : 0);
-                        break;
-                    }
-                    case 0b100: // xor
-                    {
-                        if (instr.funct7 != 0b0000000) {
-                            // illegal instruction exception (cause 2)
+                        default:
+                            //illegal
                             break;
-                        }
-                        registers.set(instr.rd, registers.get(instr.rs1) ^ registers.get(instr.rs2));
-                        break;
                     }
-                    case 0b101: // srl (funct7 == 0b0000000) / sra (funct7 == 0b0100000)
-                    {
-                        u64 x = registers.get(instr.rs1);
-                        u8 shamt = registers.get(instr.rs2) & 0b111111;
-                        if (instr.funct7 == 0b0000000) {
-                            // srl
-                            registers.set(instr.rd, x >> shamt);
-                        } else if (instr.funct7 == 0b0100000) {
-                            // sra
-                            registers.set(instr.rd, static_cast<u64>(static_cast<i64>(x) >> shamt));
-                        } else {
-                            // illegal instruction exception (cause 2)
-                        }
-                        break;
-                    }
-                    case 0b110: // or
-                    {
-                        if (instr.funct7 != 0b0000000) {
-                            // illegal instruction exception (cause 2)
-                            break;
-                        }
-                        registers.set(instr.rd, registers.get(instr.rs1) | registers.get(instr.rs2));
-                        break;
-                    }
-                    case 0b111: // and
-                    {
-                        if (instr.funct7 != 0b0000000) {
-                            // illegal instruction exception (cause 2)
-                            break;
-                        }
-                        registers.set(instr.rd, registers.get(instr.rs1) & registers.get(instr.rs2));
-                        break;
-                    }
-                    default:
-                        break;
+                    break;
                 }
-                break;
-            }
-            case LUI:
-            {
-                registers.set(instr.rd , instr.imm);
-                break;
-            }
-            case OP_32:
-            {
-                switch(instr.funct3)
+                case STORE:
                 {
-                    case 0b000: // addw (funct7 == 0b0000000) / subw (funct7 == 0b0100000)
+                    u64 imm = instr.imm;
+                    u64 addr = imm + registers.get(instr.rs1);
+                    switch(instr.funct3)
                     {
-                        if (instr.funct7 == 0b0000000)
+                        case 0b000: // sb
                         {
-                            //  addw
-                            u32 x1 = static_cast<u32>(registers.get(instr.rs1));
-                            u32 x2 = static_cast<u32>(registers.get(instr.rs2));
-                            registers.set(
-                                instr.rd,
-                                sext(static_cast<u64>(x1 + x2),32)
-                            );
+                            memory.access(addr, 8, AccessClass::WRITE,registers.get(instr.rs2));
+                            break;
                         }
-                        else if (instr.funct7 == 0b0100000)
+                        case 0b001: // sh
                         {
-                            //subw
-                            u32 x1 = static_cast<u32>(registers.get(instr.rs1));
-                            u32 x2 = static_cast<u32>(registers.get(instr.rs2));
-                            registers.set(
-                                instr.rd,
-                                sext(static_cast<u64>(x1 - x2),32)
-                            );
+                            memory.access(addr, 16, AccessClass::WRITE,registers.get(instr.rs2));
+                            break;
                         }
-                        else
+                        case 0b010: // sw
                         {
-                            //  illegal
+                            memory.access(addr, 32, AccessClass::WRITE,registers.get(instr.rs2));
+                            break;
                         }
-                        break;
+                        case 0b011: // sd
+                        {
+                            memory.access(addr, 64, AccessClass::WRITE,registers.get(instr.rs2));
+                            break;
+                        }
+                        default:
+                            // illegal
+                            break;
                     }
-                    case 0b001: // sllw
+                    if (addr == tohost_ram_addr) done = true;
+                    break;
+                }
+                case OP:
+                {
+                    switch(instr.funct3)
                     {
-                        if (instr.funct7 == 0b0000000)
+                        case 0b000: // add (funct7 == 0b0000000) / sub (funct7 == 0b0100000)
+                        {
+                            u64 x = registers.get(instr.rs1);
+                            u64 y = registers.get(instr.rs2);
+                            if (instr.funct7 == 0b0000000) {
+                                // add
+                                registers.set(instr.rd, x + y);
+                            } else if (instr.funct7 == 0b0100000) {
+                                // sub
+                                registers.set(instr.rd, x - y);
+                            } else {
+                                // illegal instruction exception (cause 2)
+                            }
+                            break;
+                        }
+                        case 0b001: // sll
+                        {
+                            if (instr.funct7 != 0b0000000) {
+                                // illegal instruction exception (cause 2)
+                                break;
+                            }
+                            u8 shamt = registers.get(instr.rs2) & 0b111111;
+                            registers.set(instr.rd, registers.get(instr.rs1) << shamt);
+                            break;
+                        }
+                        case 0b010: // slt
+                        {
+                            if (instr.funct7 != 0b0000000) {
+                                // illegal instruction exception (cause 2)
+                                break;
+                            }
+                            i64 x = static_cast<i64>(registers.get(instr.rs1));
+                            i64 y = static_cast<i64>(registers.get(instr.rs2));
+                            registers.set(instr.rd, x < y ? 1 : 0);
+                            break;
+                        }
+                        case 0b011: // sltu
+                        {
+                            if (instr.funct7 != 0b0000000) {
+                                // illegal instruction exception (cause 2)
+                                break;
+                            }
+                            u64 x = registers.get(instr.rs1);
+                            u64 y = registers.get(instr.rs2);
+                            registers.set(instr.rd, x < y ? 1 : 0);
+                            break;
+                        }
+                        case 0b100: // xor
+                        {
+                            if (instr.funct7 != 0b0000000) {
+                                // illegal instruction exception (cause 2)
+                                break;
+                            }
+                            registers.set(instr.rd, registers.get(instr.rs1) ^ registers.get(instr.rs2));
+                            break;
+                        }
+                        case 0b101: // srl (funct7 == 0b0000000) / sra (funct7 == 0b0100000)
+                        {
+                            u64 x = registers.get(instr.rs1);
+                            u8 shamt = registers.get(instr.rs2) & 0b111111;
+                            if (instr.funct7 == 0b0000000) {
+                                // srl
+                                registers.set(instr.rd, x >> shamt);
+                            } else if (instr.funct7 == 0b0100000) {
+                                // sra
+                                registers.set(instr.rd, static_cast<u64>(static_cast<i64>(x) >> shamt));
+                            } else {
+                                // illegal instruction exception (cause 2)
+                            }
+                            break;
+                        }
+                        case 0b110: // or
+                        {
+                            if (instr.funct7 != 0b0000000) {
+                                // illegal instruction exception (cause 2)
+                                break;
+                            }
+                            registers.set(instr.rd, registers.get(instr.rs1) | registers.get(instr.rs2));
+                            break;
+                        }
+                        case 0b111: // and
+                        {
+                            if (instr.funct7 != 0b0000000) {
+                                // illegal instruction exception (cause 2)
+                                break;
+                            }
+                            registers.set(instr.rd, registers.get(instr.rs1) & registers.get(instr.rs2));
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+                    break;
+                }
+                case LUI:
+                {
+                    registers.set(instr.rd , instr.imm);
+                    break;
+                }
+                case OP_32:
+                {
+                    switch(instr.funct3)
+                    {
+                        case 0b000: // addw (funct7 == 0b0000000) / subw (funct7 == 0b0100000)
+                        {
+                            if (instr.funct7 == 0b0000000)
+                            {
+                                //  addw
+                                u32 x1 = static_cast<u32>(registers.get(instr.rs1));
+                                u32 x2 = static_cast<u32>(registers.get(instr.rs2));
+                                registers.set(
+                                    instr.rd,
+                                    sext(static_cast<u64>(x1 + x2),32)
+                                );
+                            }
+                            else if (instr.funct7 == 0b0100000)
+                            {
+                                //subw
+                                u32 x1 = static_cast<u32>(registers.get(instr.rs1));
+                                u32 x2 = static_cast<u32>(registers.get(instr.rs2));
+                                registers.set(
+                                    instr.rd,
+                                    sext(static_cast<u64>(x1 - x2),32)
+                                );
+                            }
+                            else
+                            {
+                                //  illegal
+                            }
+                            break;
+                        }
+                        case 0b001: // sllw
+                        {
+                            if (instr.funct7 == 0b0000000)
+                            {
+                                u32 x = static_cast<u32>(registers.get(instr.rs1));
+                                u8 shamt = registers.get(instr.rs2) & 0b11111;
+                                x = x << shamt;
+                                registers.set(
+                                    instr.rd,
+                                    sext(static_cast<u64>(x),32)
+                                );
+                            }
+                            else
+                            {
+                                //  illegal
+                            }
+
+                            break;
+                        }
+                        case 0b101: // srlw (funct7 == 0b0000000) / sraw (funct7 == 0b0100000)
                         {
                             u32 x = static_cast<u32>(registers.get(instr.rs1));
                             u8 shamt = registers.get(instr.rs2) & 0b11111;
-                            x = x << shamt;
-                            registers.set(
-                                instr.rd,
-                                sext(static_cast<u64>(x),32)
-                            );
+
+                            if (instr.funct7 == 0b0000000) {
+                                // srlw
+                                registers.set(instr.rd, sext(static_cast<u64>(x >> shamt), 32));
+                            } else if (instr.funct7 == 0b0100000) {
+                                // sraw
+                                i32 res = static_cast<i32>(x) >> shamt;
+                                registers.set(instr.rd, static_cast<u64>(static_cast<i64>(res)));
+                            } else {
+                                // illegal instruction exception (cause 2)
+                            }
+                            break;
                         }
-                        else
-                        {
+                        default:
                             //  illegal
-                        }
-
-                        break;
+                            break;
                     }
-                    case 0b101: // srlw (funct7 == 0b0000000) / sraw (funct7 == 0b0100000)
-                    {
-                        u32 x = static_cast<u32>(registers.get(instr.rs1));
-                        u8 shamt = registers.get(instr.rs2) & 0b11111;
-
-                        if (instr.funct7 == 0b0000000) {
-                            // srlw
-                            registers.set(instr.rd, sext(static_cast<u64>(x >> shamt), 32));
-                        } else if (instr.funct7 == 0b0100000) {
-                            // sraw
-                            i32 res = static_cast<i32>(x) >> shamt;
-                            registers.set(instr.rd, static_cast<u64>(static_cast<i64>(res)));
-                        } else {
-                            // illegal instruction exception (cause 2)
-                        }
-                        break;
-                    }
-                    default:
-                        //  illegal
-                        break;
+                    break;
                 }
-                break;
-            }
-            case BRANCH:
-            {
-                u64 true_pc = pc + instr.imm;
-                if (true_pc % 4 != 0)
+                case BRANCH:
                 {
-                    //  misaligned, illegal
-                    pc+=4;
-                    continue;
+                    u64 true_pc = pc + instr.imm;
+                    if (true_pc % 4 != 0)
+                    {
+                        //  misaligned, illegal
+                        pc+=4;
+                        continue;
+                    }
+                    switch(instr.funct3)
+                    {
+                        case 0b000: // beq
+                        {
+                            if (registers.get(instr.rs1) == registers.get(instr.rs2))
+                            {
+                                next_pc = true_pc;
+                            }
+                            break;
+                        }
+                        case 0b001: // bne
+                        {
+                            if (registers.get(instr.rs1) != registers.get(instr.rs2))
+                            {
+                                next_pc = true_pc;
+                            }
+                            break;
+                        }
+                        case 0b100: // blt
+                        {
+                            if (static_cast<i64>(registers.get(instr.rs1)) < static_cast<i64>(registers.get(instr.rs2)))
+                            {
+                                next_pc = true_pc;
+                            }
+                            break;
+                        }
+                        case 0b101: // bge
+                        {
+                            if (static_cast<i64>(registers.get(instr.rs1)) >= static_cast<i64>(registers.get(instr.rs2)))
+                            {
+                                next_pc = true_pc;
+                            }
+                            break;
+                        }
+                        case 0b110: // bltu
+                        {
+                            if (registers.get(instr.rs1) < registers.get(instr.rs2))
+                            {
+                                next_pc = true_pc;
+                            }
+                            break;
+                        }
+                        case 0b111: // bgeu
+                        {
+                            if (registers.get(instr.rs1) >= registers.get(instr.rs2))
+                            {
+                                next_pc = true_pc;
+                            }
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+                    break;
                 }
-                switch(instr.funct3)
+                case JALR:
                 {
-                    case 0b000: // beq
+                    switch(instr.funct3)
                     {
-                        if (registers.get(instr.rs1) == registers.get(instr.rs2))
+                        case 0b000: // jalr
                         {
-                            next_pc = true_pc;
-                        }
-                        break;
-                    }
-                    case 0b001: // bne
-                    {
-                        if (registers.get(instr.rs1) != registers.get(instr.rs2))
-                        {
-                            next_pc = true_pc;
-                        }
-                        break;
-                    }
-                    case 0b100: // blt
-                    {
-                        if (static_cast<i64>(registers.get(instr.rs1)) < static_cast<i64>(registers.get(instr.rs2)))
-                        {
-                            next_pc = true_pc;
-                        }
-                        break;
-                    }
-                    case 0b101: // bge
-                    {
-                        if (static_cast<i64>(registers.get(instr.rs1)) >= static_cast<i64>(registers.get(instr.rs2)))
-                        {
-                            next_pc = true_pc;
-                        }
-                        break;
-                    }
-                    case 0b110: // bltu
-                    {
-                        if (registers.get(instr.rs1) < registers.get(instr.rs2))
-                        {
-                            next_pc = true_pc;
-                        }
-                        break;
-                    }
-                    case 0b111: // bgeu
-                    {
-                        if (registers.get(instr.rs1) >= registers.get(instr.rs2))
-                        {
-                            next_pc = true_pc;
-                        }
-                        break;
-                    }
-                    default:
-                        break;
-                }
-                break;
-            }
-            case JALR:
-            {
-                switch(instr.funct3)
-                {
-                    case 0b000: // jalr
-                    {
-                        u64 target = (registers.get(instr.rs1) + instr.imm) & ~u64{1};
-                        if (target % 4 != 0)
-                        {
-                            //  illegal, misaligned target
+                            u64 target = (registers.get(instr.rs1) + instr.imm) & ~u64{1};
+                            if (target % 4 != 0)
+                            {
+                                //  illegal, misaligned target
 
+                            }
+                            registers.set(instr.rd,pc+4);
+                            next_pc = target;
                         }
-                        registers.set(instr.rd,pc+4);
-                        next_pc = target;
+                        default:
+                            // illegal
+                            break;
                     }
-                    default:
-                        // illegal
-                        break;
+                    break;
                 }
-                break;
-            }
-            case JAL:
-            {
-                registers.set(instr.rd,pc+4);
-                if ((pc+ instr.imm) % 4 != 0)
+                case JAL:
                 {
-                    //  illegal, misaligned target
+                    registers.set(instr.rd,pc+4);
+                    if ((pc+ instr.imm) % 4 != 0)
+                    {
+                        //  illegal, misaligned target
+                    }
+                    next_pc = pc + instr.imm;
                 }
-                next_pc = pc + instr.imm;
-            }
-            case SYSTEM:
-            {
-
-                switch(instr.funct3)
+                case SYSTEM:
                 {
-                    case 0b000: // ecall (0x00000073) / mret (0x30200073)
+                    //  csr goes into rd, new goes into csr
+                    u16 csr_number = static_cast<u16>(instr.imm);
+                    switch(instr.funct3)
                     {
-                        if (raw_instr == 0x00000073)
+                        case 0b000: // ecall (0x00000073) / mret (0x30200073)
                         {
-                            //  ecall
+                            if (raw_instr == 0x00000073)
+                            {
+                                //  ecall
+                                trap(8 + privilege, 0);
+                                continue;
+                            }
+                            else if (raw_instr == 0x30200073)
+                            {
+                                //  mret
+                                pc = csr.get_mepc();
+                                privilege = csr.get_mstatus_mpp();
+                                // mie takes value of mpie
+                                csr.set_mstatus_mie(csr.get_mstatus_mpie());
+                                // mpie becomes 1
+                                csr.set_mstatus_mpie(true);
+                                // mpp becomes least privileged mode
+                                csr.set_mstatus_mpp(0); // user mode
+                                // mprv becomes 0 if the new level is not machine mode
+                                csr.set_mstatus_mprv(0);
+                                continue;
+                            }
+                            else 
+                            {
+                                //  illegal
+                                
+                            }
+                            break;
                         }
-                        else if (raw_instr == 0x30200073)
+                        case 0b001: // csrrw
                         {
-                            //  mret
+                            u64 old = 0;
+                            //  only read if rd is not x0
+                            if (instr.rd != 0)
+                            {
+                                old = csr.read(csr_number);
+                            }
+                            csr.write(csr_number, registers.get(instr.rs1));
+                            registers.set(instr.rd,old);
+                            break;
                         }
-                        else 
+                        case 0b010: // csrrs
                         {
-                            //  illegal
-
+                            u64 old = csr.read(csr_number);
+                            //  only write if rs1 field is not x0
+                            if (instr.rs1 != 0)
+                            {
+                                csr.write(csr_number, old | registers.get(instr.rs1));
+                            }
+                            registers.set(instr.rd,old);
+                            break;
                         }
-                        break;
+                        case 0b011: // csrrc
+                        {
+                            u64 old = csr.read(csr_number);
+                            //  only write if rs1 field is not x0
+                            if (instr.rs1 != 0)
+                            {
+                                csr.write(csr_number, old & ~registers.get(instr.rs1));
+                            }
+                            registers.set(instr.rd,old);
+                            break;
+                        }
+                        case 0b101: // csrrwi
+                        {
+                            u64 old = 0;
+                            //  only read if rd is not x0
+                            if (instr.rd != 0)
+                            {
+                                old = csr.read(csr_number);
+                            }
+                            csr.write(csr_number, static_cast<u64>(instr.rs1));
+                            registers.set(instr.rd,old);
+                            break;
+                        }
+                        case 0b110: // csrrsi
+                        {
+                            u64 old = csr.read(csr_number);
+                            //  only write if rs1 field is not x0
+                            if (instr.rs1 != 0)
+                            {
+                                csr.write(csr_number, old | static_cast<u8>(instr.rs1));
+                            }
+                            registers.set(instr.rd,old);
+                            break;
+                        }
+                        case 0b111: // csrrci
+                        {
+                            u64 old = csr.read(csr_number);
+                            //  only write if rs1 field is not x0
+                            if (instr.rs1 != 0)
+                            {
+                                csr.write(csr_number, old & ~static_cast<u64>(instr.rs1));
+                            }
+                            registers.set(instr.rd,old);
+                            break;
+                        }
+                        default:
+                            break;
                     }
-                    case 0b001: // csrrw
-                    {
-                        break;
-                    }
-                    case 0b010: // csrrs
-                    {
-                        break;
-                    }
-                    case 0b011: // csrrc
-                    {
-                        break;
-                    }
-                    case 0b101: // csrrwi
-                    {
-                        break;
-                    }
-                    case 0b110: // csrrsi
-                    {
-                        break;
-                    }
-                    case 0b111: // csrrci
-                    {
-                        break;
-                    }
-                    default:
-                        break;
+                    break;
                 }
-                break;
+                default:
+                {
+                    //  unrecognized opcode
+                    break;
+                }
+                pc = next_pc;
             }
-            default:
-            {
-                //  unrecognized opcode
-                break;
-            }
-            pc = next_pc;
         }
-
+        catch (const Trap& t)
+        {
+            trap(t.cause,t.tval);
+        }
     }
     return memory.access(tohost_ram_addr, 64, AccessClass::READ) >> 1 ;
 }

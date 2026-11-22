@@ -1,6 +1,5 @@
 #pragma once
 #include "shared.hpp"
-#include <exception>
 #include <vector>
 //  constants:
 inline constexpr u64 MEM_SIZE = 1 << 27; // 128 MiB

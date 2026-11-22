@@ -20,7 +20,7 @@ class Hart
     CSRFile csr{};
     u8 privilege{3};  //  privilege level. 0 = user 1=supervisor 3=machine
     
-    
+    void trap(u64 cause, u64 tval);
 
     public:
     //  getters and setters:

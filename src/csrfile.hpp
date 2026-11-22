@@ -64,5 +64,31 @@ class CSRFile
     //  more general read/write based on 16 bit addr of the CSR:
     u64 read(u16 addr);
     void write(u16 addr, u64 value);
+
+    //  mstatus field accessors:
+    //  MPP = bits 12:11, MIE = bit 3, MPIE = bit 7
+    u8 get_mstatus_mpp() const { return static_cast<u8>(bits(mstatus, 11, 12)); }
+    void set_mstatus_mpp(u8 mode)
+    {
+        mstatus = (mstatus & ~(u64{0b11} << 11)) | (static_cast<u64>(mode & 0b11) << 11);
+    }
+
+    bool get_mstatus_mie() const { return bits(mstatus, 3, 3); }
+    void set_mstatus_mie(bool on)
+    {
+        mstatus = (mstatus & ~(u64{1} << 3)) | (static_cast<u64>(on) << 3);
+    }
+
+    bool get_mstatus_mpie() const { return bits(mstatus, 7, 7); }
+    void set_mstatus_mpie(bool on)
+    {
+        mstatus = (mstatus & ~(u64{1} << 7)) | (static_cast<u64>(on) << 7);
+    }
+    //  MPRV = bit 17
+    bool get_mstatus_mprv() const { return bits(mstatus, 17, 17); }
+    void set_mstatus_mprv(bool on)
+    {
+        mstatus = (mstatus & ~(u64{1} << 17)) | (static_cast<u64>(on) << 17);
+    }
     
 };
