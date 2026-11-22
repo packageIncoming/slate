@@ -1,7 +1,6 @@
 #include "loader.hpp"
 #include "elf.hpp"
 #include "hart.hpp"
-#include <iostream>
 
 
 int Loader::load(Hart& hart, ELF_File& elf)

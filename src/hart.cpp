@@ -3,7 +3,6 @@
 #include "memory.hpp"
 #include "shared.hpp"
 #include <cstring>
-#include <iostream>
 #include "trap.hpp"
 
 void Hart::trap(u64 cause, u64 tval)
@@ -24,6 +23,25 @@ void Hart::trap(u64 cause, u64 tval)
     pc = csr.get_mtvec() & ~static_cast<u64>(3);
 }
 
+u64 Hart::access(u64 addr, u64 width, AccessType type, u64 data)
+{
+    MemAccessClass cls = (type == AccessType::STORE) ? MemAccessClass::WRITE : MemAccessClass::READ;
+    try
+    {
+        return memory.access(addr, width, cls, data);
+    }
+    catch (const MemFault&)
+    {
+        switch(type)
+        {
+            case AccessType::FETCH: throw Trap{1, addr};
+            case AccessType::LOAD:  throw Trap{5, addr};
+            case AccessType::STORE: throw Trap{7, addr};
+        }
+    }
+    return 0;   //  unreachable, keeps -Werror happy
+}
+
 int Hart::run()
 {
     bool done = false;
@@ -33,14 +51,14 @@ int Hart::run()
         try
         {
 
-            u32 raw_instr = static_cast<u32>(memory.access(pc, 32, AccessClass::READ));
+            u32 raw_instr = static_cast<u32>(access(pc, 32, AccessType::FETCH));
             
             //  decode it
             Instruction instr = Decoder::decode(raw_instr);
             u64 next_pc = pc+4;
             switch(instr.op)
             {
-                case LOAD:
+                case OPCODE::LOAD:
                 {
                     u64 addr = registers.get(instr.rs1) + instr.imm;
                     u64 result = 0;
@@ -48,55 +66,55 @@ int Hart::run()
                     {
                         case 0b000: // lb
                         {
-                            u64 val =(memory.access(addr, 8, AccessClass::READ));
+                            u64 val =(memory.access(addr, 8, MemAccessClass::READ));
                             result = sext(val,8);
                             break;
                         }
                         case 0b001: // lh
                         {
-                            u64 val =(memory.access(addr, 16, AccessClass::READ));
+                            u64 val =(memory.access(addr, 16, MemAccessClass::READ));
                             result = sext(val,16);
                             break;
                         }
                         case 0b010: //lw
                         {
-                            u64 val =(memory.access(addr, 32, AccessClass::READ));
+                            u64 val =(memory.access(addr, 32, MemAccessClass::READ));
                             result = sext(val,32);
                             break;
                         }
                         case 0b011:// ld
                         {
-                            u64 val =(memory.access(addr, 64, AccessClass::READ));
+                            u64 val =(memory.access(addr, 64, MemAccessClass::READ));
                             result = sext(val,64);
                             break;
                         }
                         case 0b100: //lbu
                         {
-                            u64 val =(memory.access(addr, 8, AccessClass::READ));
+                            u64 val =(memory.access(addr, 8, MemAccessClass::READ));
                             result = val;
                             break;
                         }
                         case 0b101:// lhu
                         {
-                            u64 val =(memory.access(addr, 16, AccessClass::READ));
+                            u64 val =(memory.access(addr, 16, MemAccessClass::READ));
                             result = val;
                             break;
                         }
                         case 0b110: // lwu
                         {
-                            u64 val =(memory.access(addr, 32, AccessClass::READ));
+                            u64 val =(memory.access(addr, 32, MemAccessClass::READ));
                             result = val;
                             break;
                         }
                         default:
                             //  illegal
-                            break;
+                            throw Trap{2, raw_instr};
                     }
                     //  now update the value 
                     registers.set(instr.rd,result);
                     break;
                 }
-                case MISC_MEM:
+                case OPCODE::MISC_MEM:
                 {
                     switch(instr.funct3)
                     {
@@ -110,14 +128,14 @@ int Hart::run()
                         }
                         default:
                         {
-                            //illegal
-                            break;
+                            //  illegal
+                            throw Trap{2, raw_instr}; 
                         }
 
                     }
                     break;
                 }
-                case OP_IMM:
+                case OPCODE::OP_IMM:
                 {
                     switch(instr.funct3)
                     {
@@ -131,7 +149,7 @@ int Hart::run()
                         {
                             if (bits(raw_instr, 26, 31) != 0b000000) {
                                 // raise illegal instruction exception (cause 2)
-                                break;
+                                throw Trap{2, raw_instr}; 
                             }
                             u8 shamt = bits(raw_instr,20,25);
                             u64 x = registers.get(instr.rs1);
@@ -185,6 +203,7 @@ int Hart::run()
                                 registers.set(instr.rd, static_cast<u64>(static_cast<i64>(x) >> shamt));
                             } else {
                                 // reserved/unrecognized encoding -> illegal instruction exception (cause 2)
+                                throw Trap{2, raw_instr}; 
                             }
                             break;
                         }
@@ -204,16 +223,16 @@ int Hart::run()
                         }
                         default:
                             //illegal
-                            break;
+                            throw Trap{2, raw_instr}; 
                     }
                     break;
                 }
-                case AUIPC:
+                case OPCODE::AUIPC:
                 {
                     registers.set(instr.rd ,pc + instr.imm);
                     break;
                 }
-                case OP_IMM_32:
+                case OPCODE::OP_IMM_32:
                 {
                     switch(instr.funct3)
                     {
@@ -244,6 +263,7 @@ int Hart::run()
                             else
                             {
                                 //illegal
+                                throw Trap{2, raw_instr}; 
                             }
                             break;
                         }
@@ -275,16 +295,18 @@ int Hart::run()
                             else
                             {
                                 //  illegal
+                                throw Trap{2, raw_instr};
                             }
                             break;
                         }
                         default:
                             //illegal
+                            throw Trap{2, raw_instr};
                             break;
                     }
                     break;
                 }
-                case STORE:
+                case OPCODE::STORE:
                 {
                     u64 imm = instr.imm;
                     u64 addr = imm + registers.get(instr.rs1);
@@ -292,32 +314,32 @@ int Hart::run()
                     {
                         case 0b000: // sb
                         {
-                            memory.access(addr, 8, AccessClass::WRITE,registers.get(instr.rs2));
+                            memory.access(addr, 8, MemAccessClass::WRITE,registers.get(instr.rs2));
                             break;
                         }
                         case 0b001: // sh
                         {
-                            memory.access(addr, 16, AccessClass::WRITE,registers.get(instr.rs2));
+                            memory.access(addr, 16, MemAccessClass::WRITE,registers.get(instr.rs2));
                             break;
                         }
                         case 0b010: // sw
                         {
-                            memory.access(addr, 32, AccessClass::WRITE,registers.get(instr.rs2));
+                            memory.access(addr, 32, MemAccessClass::WRITE,registers.get(instr.rs2));
                             break;
                         }
                         case 0b011: // sd
                         {
-                            memory.access(addr, 64, AccessClass::WRITE,registers.get(instr.rs2));
+                            memory.access(addr, 64, MemAccessClass::WRITE,registers.get(instr.rs2));
                             break;
                         }
                         default:
-                            // illegal
-                            break;
+                            //  illegal
+                            throw Trap{2, raw_instr};                       
                     }
                     if (addr == tohost_ram_addr) done = true;
                     break;
                 }
-                case OP:
+                case OPCODE::OP:
                 {
                     switch(instr.funct3)
                     {
@@ -333,6 +355,7 @@ int Hart::run()
                                 registers.set(instr.rd, x - y);
                             } else {
                                 // illegal instruction exception (cause 2)
+                                throw Trap{2, raw_instr};
                             }
                             break;
                         }
@@ -340,7 +363,7 @@ int Hart::run()
                         {
                             if (instr.funct7 != 0b0000000) {
                                 // illegal instruction exception (cause 2)
-                                break;
+                                throw Trap{2, raw_instr};
                             }
                             u8 shamt = registers.get(instr.rs2) & 0b111111;
                             registers.set(instr.rd, registers.get(instr.rs1) << shamt);
@@ -350,7 +373,7 @@ int Hart::run()
                         {
                             if (instr.funct7 != 0b0000000) {
                                 // illegal instruction exception (cause 2)
-                                break;
+                                throw Trap{2, raw_instr};
                             }
                             i64 x = static_cast<i64>(registers.get(instr.rs1));
                             i64 y = static_cast<i64>(registers.get(instr.rs2));
@@ -361,7 +384,7 @@ int Hart::run()
                         {
                             if (instr.funct7 != 0b0000000) {
                                 // illegal instruction exception (cause 2)
-                                break;
+                                throw Trap{2, raw_instr};
                             }
                             u64 x = registers.get(instr.rs1);
                             u64 y = registers.get(instr.rs2);
@@ -372,7 +395,7 @@ int Hart::run()
                         {
                             if (instr.funct7 != 0b0000000) {
                                 // illegal instruction exception (cause 2)
-                                break;
+                                throw Trap{2, raw_instr};
                             }
                             registers.set(instr.rd, registers.get(instr.rs1) ^ registers.get(instr.rs2));
                             break;
@@ -389,6 +412,7 @@ int Hart::run()
                                 registers.set(instr.rd, static_cast<u64>(static_cast<i64>(x) >> shamt));
                             } else {
                                 // illegal instruction exception (cause 2)
+                                throw Trap{2, raw_instr};
                             }
                             break;
                         }
@@ -396,7 +420,7 @@ int Hart::run()
                         {
                             if (instr.funct7 != 0b0000000) {
                                 // illegal instruction exception (cause 2)
-                                break;
+                                throw Trap{2, raw_instr};
                             }
                             registers.set(instr.rd, registers.get(instr.rs1) | registers.get(instr.rs2));
                             break;
@@ -405,7 +429,7 @@ int Hart::run()
                         {
                             if (instr.funct7 != 0b0000000) {
                                 // illegal instruction exception (cause 2)
-                                break;
+                                throw Trap{2, raw_instr};
                             }
                             registers.set(instr.rd, registers.get(instr.rs1) & registers.get(instr.rs2));
                             break;
@@ -415,12 +439,12 @@ int Hart::run()
                     }
                     break;
                 }
-                case LUI:
+                case OPCODE::LUI:
                 {
                     registers.set(instr.rd , instr.imm);
                     break;
                 }
-                case OP_32:
+                case OPCODE::OP_32:
                 {
                     switch(instr.funct3)
                     {
@@ -449,6 +473,7 @@ int Hart::run()
                             else
                             {
                                 //  illegal
+                                throw Trap{2, raw_instr};
                             }
                             break;
                         }
@@ -467,6 +492,7 @@ int Hart::run()
                             else
                             {
                                 //  illegal
+                                throw Trap{2, raw_instr};
                             }
 
                             break;
@@ -485,23 +511,23 @@ int Hart::run()
                                 registers.set(instr.rd, static_cast<u64>(static_cast<i64>(res)));
                             } else {
                                 // illegal instruction exception (cause 2)
+                                throw Trap{2, raw_instr};
                             }
                             break;
                         }
                         default:
                             //  illegal
-                            break;
+                            throw Trap{2, raw_instr};
                     }
                     break;
                 }
-                case BRANCH:
+                case OPCODE::BRANCH:
                 {
                     u64 true_pc = pc + instr.imm;
                     if (true_pc % 4 != 0)
                     {
                         //  misaligned, illegal
-                        pc+=4;
-                        continue;
+                        throw Trap{4, raw_instr};
                     }
                     switch(instr.funct3)
                     {
@@ -558,7 +584,7 @@ int Hart::run()
                     }
                     break;
                 }
-                case JALR:
+                case OPCODE::JALR:
                 {
                     switch(instr.funct3)
                     {
@@ -568,28 +594,31 @@ int Hart::run()
                             if (target % 4 != 0)
                             {
                                 //  illegal, misaligned target
-
+                                throw Trap{4, raw_instr};
                             }
                             registers.set(instr.rd,pc+4);
                             next_pc = target;
+                            break;
                         }
                         default:
                             // illegal
+                            throw Trap{2, raw_instr};
                             break;
                     }
                     break;
                 }
-                case JAL:
+                case OPCODE::JAL:
                 {
                     registers.set(instr.rd,pc+4);
                     if ((pc+ instr.imm) % 4 != 0)
                     {
                         //  illegal, misaligned target
+                        throw Trap{4, raw_instr};
                     }
                     next_pc = pc + instr.imm;
                     break;
                 }
-                case SYSTEM:
+                case OPCODE::SYSTEM:
                 {
                     //  csr goes into rd, new goes into csr
                     u16 csr_number = static_cast<u16>(instr.imm);
@@ -621,7 +650,7 @@ int Hart::run()
                             else 
                             {
                                 //  illegal
-
+                                throw Trap{2, raw_instr};
                             }
                             break;
                         }
@@ -711,5 +740,5 @@ int Hart::run()
             trap(t.cause,t.tval);
         }
     }
-    return memory.access(tohost_ram_addr, 64, AccessClass::READ) >> 1 ;
+    return memory.access(tohost_ram_addr, 64, MemAccessClass::READ) >> 1 ;
 }

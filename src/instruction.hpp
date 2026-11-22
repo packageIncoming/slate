@@ -1,7 +1,7 @@
 #pragma once 
 #include "shared.hpp"
 
-enum OPCODE : u8
+enum class OPCODE : u8
 {
     INVALID   = 0b0000000,
     LOAD      = 0b0000011,
@@ -23,7 +23,7 @@ enum OPCODE : u8
 
 struct Instruction 
 {
-    OPCODE op{INVALID};
+    OPCODE op{OPCODE::INVALID};
     u8 rd{0};
     u8 funct3{0};
     u8 rs1{0};

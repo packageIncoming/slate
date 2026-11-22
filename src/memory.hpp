@@ -6,10 +6,12 @@ inline constexpr u64 MEM_SIZE = 1 << 27; // 128 MiB
 inline constexpr u64 MEM_START_ADDR = 0x80000000;
 inline constexpr u64 MEM_MAX_ADDR = MEM_START_ADDR + MEM_SIZE;  //NOT INCLUSIVE, THIS IS THE FIRST INVALID ADDR
 
-enum class AccessClass:u8
+enum class MemAccessClass:u8
 {
     READ = 0, WRITE, 
 };
+
+struct MemFault {};
 
 class Memory
 {   
@@ -33,7 +35,7 @@ class Memory
 
     public:
 
-    u64 access(u64 ram_addr, u64 width, AccessClass access_class,u64 data=0);
+    u64 access(u64 ram_addr, u64 width, MemAccessClass access_class,u64 data=0);
     auto begin() {return buffer.begin();}
     auto end() {return buffer.end();}
     u64 to_index(u64 addr) {return addr - MEM_START_ADDR;}

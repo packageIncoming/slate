@@ -1,4 +1,5 @@
 #include "csrfile.hpp"
+#include "trap.hpp"
 
 u64 CSRFile::read(u16 addr)
 {
@@ -17,7 +18,7 @@ u64 CSRFile::read(u16 addr)
     case CSR::PMPADDR0: return get_pmpaddr0();
     case CSR::MHARTID:  return get_mhartid();
     case CSR::MNSTATUS: return get_mnstatus();
-    default:            return 0; // or handle illegal CSR read
+    default:            throw Trap{2,0}; // invoke trap (cause 2 = illegal instruction)
     }
 }
 
@@ -37,6 +38,6 @@ void CSRFile::write(u16 addr, u64 val)
     case CSR::PMPADDR0: set_pmpaddr0(val); break;
     case CSR::MHARTID:  break; // read-only in RISC-V spec
     case CSR::MNSTATUS: set_mnstatus(val); break;
-    default:            break; // or handle illegal CSR write
+    default:            throw Trap{2,0}; // invoke trap (cause 2 = illegal instruction)
     }
 }

@@ -18,26 +18,26 @@ Instruction decode(u32 data)    //  instr.imm is sign extended to u64
     switch(instr.op)
     {
         // I type:
-        case LOAD:
-        case OP_IMM:
-        case OP_IMM_32:
-        case JALR:
-        case MISC_MEM:
+        case OPCODE::LOAD:
+        case OPCODE::OP_IMM:
+        case OPCODE::OP_IMM_32:
+        case OPCODE::JALR:
+        case OPCODE::MISC_MEM:
         instr.imm = sext(static_cast<u64>(bits(data,20,31)), 12);
         break;
         //  SYSTEM is also I type but not sign extended
-        case SYSTEM:
+        case OPCODE::SYSTEM:
         instr.imm = bits(data,20,31);
         break;
         // S type:
-        case STORE:
+        case OPCODE::STORE:
         {
             u64 raw = static_cast<u64>(bits(data,7,11)) | static_cast<u64>(bits(data,25,31) << 5);
             instr.imm = sext(raw,12);
             break;
         }
         // B type:
-        case BRANCH:
+        case OPCODE::BRANCH:
         {
             //  get imm[4:1 | 11]
             u64 raw0 = (static_cast<u64>(bits(data, 8, 11)) << 1) | (static_cast<u64>(bits(data, 7, 7)) << 11);
@@ -47,7 +47,7 @@ Instruction decode(u32 data)    //  instr.imm is sign extended to u64
             break;
         }
         // J type:
-        case JAL: {
+        case OPCODE::JAL: {
             u64 imm_20    = static_cast<u64>(bits(data, 31, 31)) << 20;
             u64 imm_19_12 = static_cast<u64>(bits(data, 12, 19)) << 12;
             u64 imm_11    = static_cast<u64>(bits(data, 20, 20)) << 11;
@@ -57,8 +57,8 @@ Instruction decode(u32 data)    //  instr.imm is sign extended to u64
             break;
         }
         // U type:
-        case LUI:
-        case AUIPC: {
+        case OPCODE::LUI:
+        case OPCODE::AUIPC: {
             u64 imm_u = static_cast<u64>(bits(data, 12, 31)) << 12;
             instr.imm = sext(imm_u, 32);
             break;

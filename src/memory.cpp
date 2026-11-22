@@ -1,5 +1,6 @@
 #include "memory.hpp"
 #include <iostream>
+#include <stdexcept>
 
 
 u64 Memory::extract64(u64 offset )
@@ -90,20 +91,22 @@ void Memory::write64(u64 ram_addr, u64 data)
 }
 
 
-u64 Memory::access(u64 ram_addr, u64 width, AccessClass access_class,u64 data)
+u64 Memory::access(u64 ram_addr, u64 width, MemAccessClass access_class,u64 data)
 {
     //  verify in bounds
     if (ram_addr < MEM_START_ADDR || ram_addr >= MEM_MAX_ADDR || (to_index(ram_addr) + width / 8 > MEM_SIZE))
     {
         std::cerr << "!!! ACCESSING OUT OF BOUNDS MEMORY !!!\n";
+        throw MemFault{};
         return 0;
-    }
+    }   
     if (width != 8u && width != 16u && width != 32u && width != 64u)
     {
         std::cerr << "!!! INVALID ACCESS WIDTH !!!\n";
+        throw MemFault{};
         return 0; 
     }
-    if (access_class == AccessClass::READ)
+    if (access_class == MemAccessClass::READ)
     {
         switch (width)
         {
@@ -111,7 +114,7 @@ u64 Memory::access(u64 ram_addr, u64 width, AccessClass access_class,u64 data)
             case 16u: return read16(ram_addr);
             case 32u: return read32(ram_addr);
             case 64u: return read64(ram_addr);
-            default: return 0;
+            default: throw std::logic_error("invalid width");
         }
     }
     else {
@@ -121,7 +124,7 @@ u64 Memory::access(u64 ram_addr, u64 width, AccessClass access_class,u64 data)
             case 16u: write16(ram_addr, static_cast<u16>(data)); return 0;
             case 32u: write32(ram_addr, static_cast<u32>(data)); return 0;
             case 64u: write64(ram_addr, data); return 0;
-            default: return 0;
+            default: throw std::logic_error("invalid width");
         }
     }
 }
