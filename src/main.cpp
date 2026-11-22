@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
         }
         //  use loader to load into hart:
         Loader::load(hart,elf);
-        hart.run();
+        return hart.run();
     }
 
 

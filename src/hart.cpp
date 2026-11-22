@@ -3,6 +3,7 @@
 #include "memory.hpp"
 #include "shared.hpp"
 #include <cstring>
+#include <iostream>
 #include "trap.hpp"
 
 void Hart::trap(u64 cause, u64 tval)
@@ -33,6 +34,7 @@ int Hart::run()
         {
 
             u32 raw_instr = static_cast<u32>(memory.access(pc, 32, AccessClass::READ));
+            
             //  decode it
             Instruction instr = Decoder::decode(raw_instr);
             u64 next_pc = pc+4;
@@ -585,6 +587,7 @@ int Hart::run()
                         //  illegal, misaligned target
                     }
                     next_pc = pc + instr.imm;
+                    break;
                 }
                 case SYSTEM:
                 {
@@ -618,7 +621,7 @@ int Hart::run()
                             else 
                             {
                                 //  illegal
-                                
+
                             }
                             break;
                         }
@@ -700,8 +703,8 @@ int Hart::run()
                     //  unrecognized opcode
                     break;
                 }
-                pc = next_pc;
             }
+            pc = next_pc;
         }
         catch (const Trap& t)
         {

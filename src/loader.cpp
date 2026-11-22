@@ -45,6 +45,5 @@ int Loader::load(Hart& hart, ELF_File& elf)
         );
     }
 
-    std::cout << "done loading :)\n";
     return 0;
 }
