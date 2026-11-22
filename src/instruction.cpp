@@ -3,7 +3,7 @@
 
 namespace Decoder
 {
-Instruction decode(u32 data)
+Instruction decode(u32 data)    //  instr.imm is sign extended to u64
 {
     Instruction instr{};
 

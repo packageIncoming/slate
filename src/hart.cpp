@@ -97,6 +97,10 @@ int Hart::run()
                     }
                     case 0b001: // slli (check bits[31:26] == 0b000000; 6-bit shamt in [25:20])
                     {
+                        if (bits(raw_instr, 26, 31) != 0b000000) {
+                            // raise illegal instruction exception (cause 2)
+                            break;
+                        }
                         u8 shamt = bits(raw_instr,20,25);
                         u64 x = registers.get(instr.rs1);
                         registers.set(instr.rd,x << shamt);
@@ -104,26 +108,66 @@ int Hart::run()
                     }
                     case 0b010: // slti
                     {
+                        i64 x = static_cast<i64>(registers.get(instr.rs1));
+                        i64 imm = static_cast<i64>(instr.imm);
+                        if (x < imm)
+                        {
+                            registers.set(instr.rd,1);
+                        }
+                        else {
+                            registers.set(instr.rd,0);
+                        }
                         break;
                     }
                     case 0b011: // sltiu
                     {
+                        u64 x = registers.get(instr.rs1);
+                        u64 imm = instr.imm;
+                        if (x < imm)
+                        {
+                            registers.set(instr.rd,1);
+                        }
+                        else {
+                            registers.set(instr.rd,0);
+                        }
                         break;
                     }
                     case 0b100: // xori
                     {
+                        u64 x = registers.get(instr.rs1);
+                        u64 imm = instr.imm;
+                        registers.set(instr.rd, x ^ imm);
                         break;
                     }
                     case 0b101: // srli (bits[31:26] == 0b000000) / srai (bits[31:26] == 0b010000)
                     {
+                        unsigned shamt = bits(raw_instr, 20, 25);
+                        u64 x = registers.get(instr.rs1);
+                        u64 top6 = bits(raw_instr, 26, 31);
+
+                        if (top6 == 0b000000) {
+                            // srli
+                            registers.set(instr.rd, x >> shamt);
+                        } else if (top6 == 0b010000) {
+                            // srai
+                            registers.set(instr.rd, static_cast<u64>(static_cast<i64>(x) >> shamt));
+                        } else {
+                            // reserved/unrecognized encoding -> illegal instruction exception (cause 2)
+                        }
                         break;
                     }
                     case 0b110: // ori
                     {
+                        u64 x = registers.get(instr.rs1);
+                        u64 imm = instr.imm;
+                        registers.set(instr.rd, x | imm);
                         break;
                     }
                     case 0b111: // andi
                     {
+                        u64 x = registers.get(instr.rs1);
+                        u64 imm = instr.imm;
+                        registers.set(instr.rd, x & imm);
                         break;
                     }
                     default:
