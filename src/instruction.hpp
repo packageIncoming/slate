@@ -28,7 +28,7 @@ struct Instruction
     u8 funct3{0};
     u8 rs1{0};
     u8 rs2{0};
-    u32 imm{0};
+    u64 imm{0};
     u8 funct7{0};
 };
 

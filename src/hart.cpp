@@ -1,6 +1,7 @@
 #include "hart.hpp"
 #include "instruction.hpp"
 #include "memory.hpp"
+#include "shared.hpp"
 #include <cstring>
 
 int Hart::run()
@@ -14,42 +15,59 @@ int Hart::run()
 
         switch(instr.op)
         {
-
             case LOAD:
             {
+                u64 addr = registers.get(instr.rs1) + instr.imm;
+                u64 result = 0;
                 switch(instr.funct3)
                 {
                     case 0b000: // lb
                     {
+                        u64 val =(memory.access(addr, 8, AccessClass::READ));
+                        result = sext(val,8);
                         break;
                     }
                     case 0b001: // lh
                     {
+                        u64 val =(memory.access(addr, 16, AccessClass::READ));
+                        result = sext(val,16);
                         break;
                     }
                     case 0b010: //lw
                     {
+                        u64 val =(memory.access(addr, 32, AccessClass::READ));
+                        result = sext(val,32);
                         break;
                     }
                     case 0b011:// ld
                     {
+                        u64 val =(memory.access(addr, 64, AccessClass::READ));
+                        result = sext(val,64);
                         break;
                     }
                     case 0b100: //lbu
                     {
+                        u64 val =(memory.access(addr, 8, AccessClass::READ));
+                        result = val;
                         break;
                     }
                     case 0b101:// lhu
                     {
+                        u64 val =(memory.access(addr, 16, AccessClass::READ));
+                        result = val;
                         break;
                     }
                     case 0b110: // lwu
                     {
+                        u64 val =(memory.access(addr, 32, AccessClass::READ));
+                        result = val;
                         break;
                     }
                     default:
                         break;
                 }
+                //  now update the value 
+                registers.set(instr.rd,result);
                 break;
             }
             case MISC_MEM:
@@ -73,10 +91,15 @@ int Hart::run()
                 {
                     case 0b000: // addi
                     {
+                        u64 val = registers.get(instr.rs1) + instr.imm;
+                        registers.set(instr.rd,val);
                         break;
                     }
                     case 0b001: // slli (check bits[31:26] == 0b000000; 6-bit shamt in [25:20])
                     {
+                        u8 shamt = bits(raw_instr,20,25);
+                        u64 x = registers.get(instr.rs1);
+                        registers.set(instr.rd,x << shamt);
                         break;
                     }
                     case 0b010: // slti

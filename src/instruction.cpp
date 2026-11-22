@@ -56,7 +56,6 @@ Instruction decode(u32 data)
             instr.imm = sext(imm_20 | imm_19_12 | imm_11 | imm_10_1, 20);
             break;
         }
-        break;
         // U type:
         case LUI:
         case AUIPC: {
