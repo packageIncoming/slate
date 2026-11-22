@@ -185,6 +185,14 @@ int Hart::run()
                 {
                     case 0b000: // addiw
                     {
+                        //  get low 32 of rs1
+                        //  get low 32 of imm
+                        // add
+                        // sign extend
+                        u32 x = static_cast<u32>(registers.get(instr.rs1));
+                        u32 imm = static_cast<u32>(instr.imm);  // already sign extended
+                        u32 res = x+imm;
+                        registers.set(instr.rd,sext(static_cast<u64>(res), 32));
                         break;
                     }
                     case 0b001: // slliw (funct7 == 0b0000000; 5-bit shamt in [24:20])
