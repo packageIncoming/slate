@@ -93,7 +93,7 @@ void Memory::write64(u64 ram_addr, u64 data)
 u64 Memory::access(u64 ram_addr, u64 width, AccessClass access_class,u64 data)
 {
     //  verify in bounds
-    if (ram_addr < MEM_START_ADDR || ram_addr >= MEM_MAX_ADDR || (to_index(ram_addr) + width / 8 >= MEM_MAX_ADDR))
+    if (ram_addr < MEM_START_ADDR || ram_addr >= MEM_MAX_ADDR || (to_index(ram_addr) + width / 8 > MEM_SIZE))
     {
         std::cerr << "!!! ACCESSING OUT OF BOUNDS MEMORY !!!\n";
         return 0;

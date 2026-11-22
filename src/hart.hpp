@@ -37,7 +37,7 @@ class Hart
     //  (subtract MEM_START_ADDR from ram to get mem)
     u64 to_index(u64 ram_addr) { return memory.to_index(ram_addr);}
 
-    Hart();
+    Hart() {};
     int run();
 
 };

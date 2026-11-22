@@ -37,6 +37,6 @@ constexpr T bits(T data, unsigned lo, unsigned hi)
 {
     constexpr unsigned  maxbits = static_cast<T>(std::numeric_limits<T>::digits)-1;
     if (hi<lo || hi > maxbits) return T{0};  //  invalid
-    if (hi == maxbits) return data;
+    if (hi == maxbits && lo == 0) return data;
     return (data >> lo) & ((T{1} << (hi-lo+1)) - 1);
 }
