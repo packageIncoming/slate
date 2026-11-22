@@ -66,43 +66,43 @@ int Hart::run()
                     {
                         case 0b000: // lb
                         {
-                            u64 val =(memory.access(addr, 8, MemAccessClass::READ));
+                            u64 val =(access(addr, 8, AccessType::LOAD));
                             result = sext(val,8);
                             break;
                         }
                         case 0b001: // lh
                         {
-                            u64 val =(memory.access(addr, 16, MemAccessClass::READ));
+                            u64 val =(access(addr, 16, AccessType::LOAD));
                             result = sext(val,16);
                             break;
                         }
                         case 0b010: //lw
                         {
-                            u64 val =(memory.access(addr, 32, MemAccessClass::READ));
+                            u64 val =(access(addr, 32, AccessType::LOAD));
                             result = sext(val,32);
                             break;
                         }
                         case 0b011:// ld
                         {
-                            u64 val =(memory.access(addr, 64, MemAccessClass::READ));
+                            u64 val =(access(addr, 64, AccessType::LOAD));
                             result = sext(val,64);
                             break;
                         }
                         case 0b100: //lbu
                         {
-                            u64 val =(memory.access(addr, 8, MemAccessClass::READ));
+                            u64 val =(access(addr, 8, AccessType::LOAD));
                             result = val;
                             break;
                         }
                         case 0b101:// lhu
                         {
-                            u64 val =(memory.access(addr, 16, MemAccessClass::READ));
+                            u64 val =(access(addr, 16, AccessType::LOAD));
                             result = val;
                             break;
                         }
                         case 0b110: // lwu
                         {
-                            u64 val =(memory.access(addr, 32, MemAccessClass::READ));
+                            u64 val =(access(addr, 32, AccessType::LOAD));
                             result = val;
                             break;
                         }
@@ -314,22 +314,22 @@ int Hart::run()
                     {
                         case 0b000: // sb
                         {
-                            memory.access(addr, 8, MemAccessClass::WRITE,registers.get(instr.rs2));
+                            access(addr, 8, AccessType::STORE,registers.get(instr.rs2));
                             break;
                         }
                         case 0b001: // sh
                         {
-                            memory.access(addr, 16, MemAccessClass::WRITE,registers.get(instr.rs2));
+                            access(addr, 16, AccessType::STORE,registers.get(instr.rs2));
                             break;
                         }
                         case 0b010: // sw
                         {
-                            memory.access(addr, 32, MemAccessClass::WRITE,registers.get(instr.rs2));
+                            access(addr, 32, AccessType::STORE,registers.get(instr.rs2));
                             break;
                         }
                         case 0b011: // sd
                         {
-                            memory.access(addr, 64, MemAccessClass::WRITE,registers.get(instr.rs2));
+                            access(addr, 64, AccessType::STORE,registers.get(instr.rs2));
                             break;
                         }
                         default:
@@ -527,7 +527,6 @@ int Hart::run()
                     if (true_pc % 4 != 0)
                     {
                         //  misaligned, illegal
-                        throw Trap{4, raw_instr};
                     }
                     switch(instr.funct3)
                     {
@@ -594,7 +593,6 @@ int Hart::run()
                             if (target % 4 != 0)
                             {
                                 //  illegal, misaligned target
-                                throw Trap{4, raw_instr};
                             }
                             registers.set(instr.rd,pc+4);
                             next_pc = target;
@@ -613,7 +611,6 @@ int Hart::run()
                     if ((pc+ instr.imm) % 4 != 0)
                     {
                         //  illegal, misaligned target
-                        throw Trap{4, raw_instr};
                     }
                     next_pc = pc + instr.imm;
                     break;
@@ -644,7 +641,8 @@ int Hart::run()
                                 // mpp becomes least privileged mode
                                 csr.set_mstatus_mpp(0); // user mode
                                 // mprv becomes 0 if the new level is not machine mode
-                                csr.set_mstatus_mprv(0);
+                                if (privilege != 3)
+                                    csr.set_mstatus_mprv(0);
                                 continue;
                             }
                             else 
@@ -730,6 +728,7 @@ int Hart::run()
                 default:
                 {
                     //  unrecognized opcode
+                    throw Trap{2,raw_instr};
                     break;
                 }
             }
@@ -740,5 +739,5 @@ int Hart::run()
             trap(t.cause,t.tval);
         }
     }
-    return memory.access(tohost_ram_addr, 64, MemAccessClass::READ) >> 1 ;
+    return access(tohost_ram_addr, 64, AccessType::LOAD) >> 1 ;
 }
